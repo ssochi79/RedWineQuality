@@ -1,22 +1,63 @@
 import streamlit as st
+import pandas as pd
 import numpy as np
 import joblib
+from sklearn.ensemble import RandomForestClassifier
 
-# 모델 불러오기
-model = joblib.load("model.pkl")
+# 데이터 로딩 캐시 (데이터셋은 온라인에서 바로 불러옴)
+@st.cache_data(show_spinner=False)
+def load_data():
+    url = "https://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/winequality-red.csv"
+    data = pd.read_csv(url, sep=';')
+    return data
 
-st.title("꽃 분류기 (Iris Classifier)")
-st.write("입력값을 기반으로 꽃의 종류를 예측합니다.")
+# 모델 학습 및 캐시
+@st.cache_resource(show_spinner=False)
+def train_model(data):
+    X = data.drop(columns='quality')
+    y = data['quality']
+    model = RandomForestClassifier(random_state=42)
+    model.fit(X, y)
+    joblib.dump(model, 'wine_quality_model.pkl')
+    return model
 
-sepal_length = st.slider("Sepal Length (cm)", 4.0, 8.0, 5.1)
-sepal_width = st.slider("Sepal Width (cm)", 2.0, 4.5, 3.5)
-petal_length = st.slider("Petal Length (cm)", 1.0, 7.0, 1.4)
-petal_width = st.slider("Petal Width (cm)", 0.1, 2.5, 0.2)
+st.title("와인 품질 예측기 (Red Wine) 🍷")
+st.write("와인의 화학적 특성을 입력하면 품질 점수를 예측합니다.")
 
-input_data = np.array([[sepal_length, sepal_width, petal_length, petal_width]])
+# 데이터 불러오기
+data = load_data()
 
-prediction = model.predict(input_data)
-predicted_class = prediction[0]
-class_names = ['Setosa', 'Versicolor', 'Virginica']
+# 슬라이더 생성 함수: 각 특성별 최소, 최대, 평균값을 활용
+def slider_with_range(feature):
+    min_val = float(data[feature].min())
+    max_val = float(data[feature].max())
+    mean_val = float(data[feature].mean())
+    return st.slider(f"{feature}", min_val, max_val, mean_val)
 
-st.write(f"예측 결과: **{class_names[predicted_class]}**")
+# 사용자 입력값 받기
+fixed_acidity = slider_with_range('fixed acidity')
+volatile_acidity = slider_with_range('volatile acidity')
+citric_acid = slider_with_range('citric acid')
+residual_sugar = slider_with_range('residual sugar')
+chlorides = slider_with_range('chlorides')
+free_sulfur_dioxide = slider_with_range('free sulfur dioxide')
+total_sulfur_dioxide = slider_with_range('total sulfur dioxide')
+density = slider_with_range('density')
+pH = slider_with_range('pH')
+sulphates = slider_with_range('sulphates')
+alcohol = slider_with_range('alcohol')
+
+input_features = np.array([[fixed_acidity, volatile_acidity, citric_acid,
+                            residual_sugar, chlorides, free_sulfur_dioxide,
+                            total_sulfur_dioxide, density, pH, sulphates, alcohol]])
+
+# 모델 불러오기 또는 학습
+try:
+    model = joblib.load('wine_quality_model.pkl')
+except FileNotFoundError:
+    model = train_model(data)
+
+# 예측
+prediction = model.predict(input_features)[0]
+
+st.markdown(f"### 예측 와인 품질 점수: **{prediction}점**")
